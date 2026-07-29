@@ -1,0 +1,953 @@
+{
+  "name": "Lead capture system",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        48,
+        0
+      ],
+      "id": "bc76959e-c34c-4429-8d0d-88b5ef06c60d",
+      "name": "Webhook",
+      "webhookId": "d43d3457-70fa-412a-ad74-6078c85cbc1a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "85c88be1-39d6-4896-94b4-2ad949e91701",
+              "leftValue": "={{ $json.body.name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "3f8111b3-db19-4bbe-a71a-d9425b4d229a",
+              "leftValue": "={{ $json.body.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "ddad0e41-b616-4b8d-9304-4cc201abfae8",
+              "leftValue": "={{ $json.body.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3fe1a735-04ed-4c2c-84ef-e0384fe36c86",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "06c484a2-9b39-4735-8a56-ba26fba3d921",
+              "name": "status",
+              "value": "incomplete_submission",
+              "type": "string"
+            },
+            {
+              "id": "9bd6e86f-6cd3-4ed5-92ae-1fb592e0c59d",
+              "name": "reason",
+              "value": "Missing required fields",
+              "type": "string"
+            },
+            {
+              "id": "9a61b728-8a8a-4826-8c93-dababe7a20ed",
+              "name": "timestamp",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        192,
+        256
+      ],
+      "id": "b9b83c6f-4250-4ec5-9ac4-2dce34d3f057",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": " application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer your api key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.1-8b-instant\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a lead qualification specialist. Analyze the lead information and determine if they are qualified.\\n\\nQualification rules:\\n- QUALIFIED if budget is Medium or High AND they have a clear specific need\\n- NOT QUALIFIED if budget is Low OR message is vague OR seems like spam\\n\\nReturn ONLY a JSON object with no other text:\\n{\\n  \\\"qualified\\\": \\\"YES\\\" or \\\"NO\\\",\\n  \\\"score\\\": number from 1 to 10,\\n  \\\"reason\\\": \\\"one sentence explanation\\\",\\n  \\\"priority\\\": \\\"HIGH\\\" or \\\"MEDIUM\\\" or \\\"LOW\\\"\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"=Name: {{$json.lead_name}}\\nCompany: {{$json.lead_company}}\\nBudget: {{$json.lead_budget}}\\nMessage: {{$json.lead_message}}\\nSource: {{$json.lead_source}}\"\n    }\n  ],\n  \"max_tokens\": 300,\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        512,
+        -96
+      ],
+      "id": "61e6c227-d344-459b-8fcd-d5af24a3754a",
+      "name": "HTTP Request1",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.first().json.choices[0].message.content;\n\n// Clean the response — remove any markdown if present\nconst cleaned = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();\n\n// Parse the JSON\nconst qualification = JSON.parse(cleaned);\n\n// Get the lead data from earlier in the workflow\nconst leadData = $('Set node').first().json;\n\nreturn [{\n  json: {\n    ...leadData,\n    qualified: qualification.qualified,\n    score: qualification.score,\n    reason: qualification.reason,\n    priority: qualification.priority\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "ab2cfb89-10a1-4031-8e36-538c88dabbb5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dd23b4ed-f99a-410d-9927-df7d1b4bbf65",
+              "name": "lead_name",
+              "value": "={{$json.body.name}}",
+              "type": "string"
+            },
+            {
+              "id": "c289512b-86f4-47af-a738-af8c49be5c21",
+              "name": "lead_email",
+              "value": "={{$json.body.email}}",
+              "type": "string"
+            },
+            {
+              "id": "1459efb5-d481-4658-a828-bb471676e623",
+              "name": "lead_company",
+              "value": "={{$json.body.company}}",
+              "type": "string"
+            },
+            {
+              "id": "02027989-cd47-4de3-8d02-dacffc484665",
+              "name": "lead_budget",
+              "value": "={{$json.body.budget}}",
+              "type": "string"
+            },
+            {
+              "id": "80335d81-898e-44f3-8717-3466de56ec33",
+              "name": "lead_message",
+              "value": "={{$json.body.message}}",
+              "type": "string"
+            },
+            {
+              "id": "a5b1228b-8541-4f51-8020-46e19f8e8ab2",
+              "name": "lead_source",
+              "value": "={{$json.body.source}}",
+              "type": "string"
+            },
+            {
+              "id": "3798eda0-eed3-406f-bac4-588cb1ede696",
+              "name": "received_at",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        352,
+        -96
+      ],
+      "id": "14b19efd-d629-4614-9ed3-395946656050",
+      "name": "Set node"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": " application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer your api key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.1-8b-instant\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a professional business development manager. Write a warm, personalized response email to a qualified lead.\\n\\nThe email should:\\n- Address them by first name\\n- Reference their specific need\\n- Briefly mention how you can help\\n- Propose a 20 minute discovery call\\n- Be friendly but professional\\n- Sign the email as Muhammad Abdullah\\n- Maximum 150 words\\n\\nReturn ONLY a raw, valid JSON object. Do not include any markdown formatting like ```json. You MUST properly escape all newlines inside the email body string using '\\\\n' instead of literal line breaks.\\n\\n{\\n  \\\"subject\\\": \\\"email subject line\\\",\\n  \\\"body\\\": \\\"full email body\\\"\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"=Lead Name: {{$json.lead_name}}\\nCompany: {{$json.lead_company}}\\nTheir Need: {{$json.lead_message}}\\nBudget Level: {{$json.lead_budget}}\\nQualification Score: {{$json.score}}/10\"\n    }\n  ],\n  \"max_tokens\": 500,\n  \"temperature\": 0.7\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        592,
+        112
+      ],
+      "id": "a15a0229-16db-4a74-90ba-08614c26b363",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.qualified }}",
+                    "rightValue": "YES",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "54bc6a4f-bdce-49b4-81d2-df09642c8b3b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Qualified"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "71e67bfc-3bf7-4bc1-9bee-1e0fda964c5b",
+                    "leftValue": "={{ $json.qualified }}",
+                    "rightValue": "NO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Not Qualified"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        -96
+      ],
+      "id": "d9d13bbc-7f9e-4149-9f22-938cc68df6fb",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json.choices[0].message.content;\nconst cleaned = response.replace(/```json/g, '').replace(/```/g, '').trim();\nconst email = JSON.parse(cleaned);\nconst leadData = $input.first().json;\n\nreturn [{\n  json: {\n    ...leadData,\n    email_subject: email.subject,\n    email_body: email.body\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        112
+      ],
+      "id": "c61c9848-2b8b-49b8-92ed-bb04d13339f0",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').item.json.body.email }}",
+        "subject": "={{$json.email_subject}}",
+        "message": "={{$json.email_body}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        112
+      ],
+      "id": "a1f184e9-344c-41c7-b628-df83729da545",
+      "name": "Send a message",
+      "webhookId": "97d6e1c9-fc12-4ebb-a5d5-9eab6c38712a",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TLmJpJEkXF8xveZz",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "your chad id",
+        "text": "=🎯 NEW QUALIFIED LEAD!  \n👤 Name: {{ $('If').item.json.body.name }}\n🏢 Company: {{ $('If').item.json.body.company }}\n💰 Budget:  {{ $('If').item.json.body.budget }}\n⭐ Score: {{ $('Code in JavaScript').item.json.score }}/10 \n🔥 Priority: {{ $('Code in JavaScript').item.json.priority }}  \n📝 Their Need:  {{ $('If').item.json.body.message }}\n🤖 AI Reason:  {{ $('Code in JavaScript').item.json.reason }}\n📧 Personalized email sent automatically ✓ 📊 Logged to Google Sheets ✓  \nSource: {{ $('If').item.json.body.source }} \nTime: {{ $('Code in JavaScript').item.json.received_at }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        768,
+        320
+      ],
+      "id": "f64aeb05-d6ab-4b19-bddc-1c849e76a7b9",
+      "name": "Send a text message",
+      "webhookId": "b4da7418-d9b6-4f4e-8dbb-943f64e66667",
+      "credentials": {
+        "telegramApi": {
+          "id": "WhiOzKx7EA8lr6MJ",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "your chad id",
+        "text": "=📋 Lead Received — Not Qualified\n\n👤 Name: {{ $('Webhook').item.json.body.name }}\n💰 Budget: {{ $('Webhook').item.json.body.budget }}\n⭐ Score: {{ $('Code in JavaScript').item.json.score }}/10\n\nReason: {{ $('Code in JavaScript').item.json.reason }}\n\n📊 Saved to Sheets for future follow-up ✓",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        -80
+      ],
+      "id": "ee275d39-c086-4bee-aed1-46d4990d048c",
+      "name": "Send a text message1",
+      "webhookId": "b4da7418-d9b6-4f4e-8dbb-943f64e66667",
+      "credentials": {
+        "telegramApi": {
+          "id": "WhiOzKx7EA8lr6MJ",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw",
+          "mode": "list",
+          "cachedResultName": "Lead Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email Sent (YES/NO)": "YES",
+            "Name": "={{ $('If').item.json.body.name }}",
+            "Email": "={{ $('If').item.json.body.email }}",
+            "Company": "={{ $('If').item.json.body.company }}",
+            "Budget": "={{ $('If').item.json.body.budget }}",
+            "Message": "={{ $('If').item.json.body.message }}",
+            "Source": "={{ $('If').item.json.body.source }}",
+            "Score (1-10)": "={{ $('Code in JavaScript').item.json.score }}",
+            "AI Reason": "={{ $('Code in JavaScript').item.json.reason }}",
+            "Priority": "={{ $('Code in JavaScript').item.json.priority }}",
+            "Qualified (YES/NO)": "={{ $('Code in JavaScript').item.json.qualified }}",
+            "Date Received": "={{ $('Code in JavaScript').item.json.received_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Qualified (YES/NO)",
+              "displayName": "Qualified (YES/NO)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score (1-10)",
+              "displayName": "Score (1-10)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reason",
+              "displayName": "AI Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Sent (YES/NO)",
+              "displayName": "Email Sent (YES/NO)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Received",
+              "displayName": "Date Received",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        976,
+        320
+      ],
+      "id": "30e8775e-cc55-4ef7-a45a-a1857e97b572",
+      "name": "Append row in sheet",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4qlLr15r9SPl0mVK",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw",
+          "mode": "list",
+          "cachedResultName": "Lead Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1epqmol5Dhtey-fMi3a6RdDEo-_qDJsnQi0hPT7H07Uw/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email Sent (YES/NO)": "NO",
+            "Name": "={{ $('Webhook').item.json.body.name }}",
+            "Email": "={{ $('Webhook').item.json.body.email }}",
+            "Company": "={{ $('Webhook').item.json.body.company }}",
+            "Budget": "={{ $('Webhook').item.json.body.budget }}",
+            "Message": "={{ $('Webhook').item.json.body.message }}",
+            "Source": "={{ $('Webhook').item.json.body.source }}",
+            "Date Received": "={{ $('Code in JavaScript').item.json.received_at }}",
+            "AI Reason": "={{ $('Code in JavaScript').item.json.reason }}",
+            "Priority": "={{ $('Code in JavaScript').item.json.priority }}",
+            "Score (1-10)": "={{ $('Code in JavaScript').item.json.score }}",
+            "Qualified (YES/NO)": "={{ $('Code in JavaScript').item.json.qualified }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Qualified (YES/NO)",
+              "displayName": "Qualified (YES/NO)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score (1-10)",
+              "displayName": "Score (1-10)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Reason",
+              "displayName": "AI Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Sent (YES/NO)",
+              "displayName": "Email Sent (YES/NO)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Received",
+              "displayName": "Date Received",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1264,
+        -80
+      ],
+      "id": "3ae3f6ef-820a-472d-93b8-75d0c8b1efed",
+      "name": "Append row in sheet1",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "4qlLr15r9SPl0mVK",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1152,
+        160
+      ],
+      "id": "6eca85e8-b4a9-4b5a-9f5c-9dcf8f978229",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f659034e-19d2-45ac-837f-d4412c02de7a",
+              "name": "system_status",
+              "value": "Lead processed successfully",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1312,
+        160
+      ],
+      "id": "6453400f-cdd0-43fc-bd1b-7f32c00b0043",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Set node",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set node": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "timezone": "Asia/Karachi",
+    "errorWorkflow": "DSo1gCyMwj92y5Cy"
+  },
+  "versionId": "78d45218-350e-4b3b-b79f-3b61fb3c719f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "721cf6432c0f21dd1d3df6b8b81cb1ad833f6cd71ef46123545371f59d776c6e"
+  },
+  "nodeGroups": [],
+  "id": "g3HJOgQpaqdVMx6M",
+  "tags": []
+}
