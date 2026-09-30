@@ -1,4 +1,4 @@
-# 🎯 Project 5: Lead Capture + Qualification System
+# 🎯 Project 6: Lead Capture + Qualification System
 
 A complete end-to-end lead processing automation that captures leads via webhook, uses AI to qualify them, sends personalized emails, and logs everything — replacing a manual, repetitive business process.
 
